@@ -1,5 +1,22 @@
 version: '3.8'
+
+networks:
+  eigenda:
+    name: ${NETWORK_NAME}
+
 services:
+  fluentd:
+    image: fluentd:latest
+    user: root 
+    volumes:
+      - ./fluentd/conf:/fluentd/etc
+      - "${IVYNET_LOG_DIR}:/var/log/fluentd"
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
+    networks:
+      - eigenda
+
   reverse-proxy:
     image: nginx:latest
     ports:
@@ -8,6 +25,7 @@ services:
     volumes:
       - "${NODE_NGINX_CONF_HOST}:/etc/nginx/templates/default.conf.template:ro"
     depends_on:
+      - fluentd
       - da-node
     networks:
       - eigenda
@@ -18,6 +36,11 @@ services:
     env_file:
       - .env
     restart: unless-stopped
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: "{{.Name}}" 
   da-node:
     env_file:
       - .env
@@ -38,6 +61,10 @@ services:
       - "${NODE_LOG_PATH_HOST}:/app/logs:rw"
       - "${NODE_DB_PATH_HOST}:/data/operator/db:rw"
     restart: unless-stopped
-networks:
-  eigenda:
-    name: ${NETWORK_NAME}
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: "{{.Name}}"
+    depends_on:
+      - fluentd
